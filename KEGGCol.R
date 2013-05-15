@@ -1,23 +1,16 @@
+#' Funktion: ColKEGGPathway
+#' This function downloads the hsa (human) pathway from the website www.kepp.jp 
+#' and color genes. The result is saved as a kgml-file. You can examine this
+#' file e.g. with KEGGtranslator
+#' 
+#' @param Genes   A data.frame with columns:
+#                   $names  : EntrezID of the Genes
+#                   $reg    : values: "up" or "down"
+#' @param KEGGID  String with KEGG ID of the pathway
+#' @param pathout Directory for the result kgml-file
+#' @param colup   html color for up-regulated genes
+#' @param coldown html color for down-regulated genes
 ColKEGGPathway <- function(Genes, KEGGID, pathout, colup="", coldown="") {
-  # ColKEGGPathway:
-  # Die Funktion lädt von der Seite www.kepp.jp den hsa (human) Pathway
-  # herunter und entsprechend der eigenen Gene eingefärbt und anschließend
-  # lokal als kgml-Datei abgespeichert. Betrachten kann man die kgml-Dateien
-  # beispielsweise mit KEGGtranslator
-  #
-  # Eingabe:
-  #   Genes:    data.frame:
-  #               $names  : die EntrezID der Gene
-  #               $reg    : "up" oder "down"; hoch- oder runterexprimiert
-  #   KEGGID:   String mit der KEGG ID des Pathways
-  #   pathout:  Speicherort für die kgml-Datei
-  #   colup, 
-  #   coldown:  html Farbangaben
-  #
-  # Ausgabe:
-  #   ids:  mehrere Gene können einem Knoten in dem Pathway zugeordnet werden,
-  #         diese werden hier mit ausgegeben
-  
   
   library(XML)
   library(stringr)
@@ -57,6 +50,3 @@ ColKEGGPathway <- function(Genes, KEGGID, pathout, colup="", coldown="") {
   
   return(ids)
 }
-
-
-
