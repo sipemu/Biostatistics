@@ -2,11 +2,11 @@
 # Recode SNP-Data to the format for SNPTEST v2: https://mathgen.stats.ox.ac.uk/genetics_software/snptest/snptest.html
 # File Format: http://www.stats.ox.ac.uk/~marchini/software/gwas/file_format.html
 #
-# Nur unter Linux oder MAC OS X ausfÃ¼hren
+# Nur unter Linux oder MAC OS X ausführen
 #
 # Beispiel:
 # 
-#    estland <- readWorksheetFromFile("09_2012_IKP266_Estland/IKP166_Estland.xlsx", sheet="IKP166_candSNP", header=TRUE)
+#    estland <- readWorksheetFromFile("Estland/IKP166_Estland.xlsx", sheet="IKP166_candSNP", header=TRUE)
 #    estland$GEB_DAT <- as.Date(estland$GEB_DAT)
 #    estland$Eingabedatum <- as.Date(estland$Eingabedatum)
 #    estland$Alter <- round((estland$Eingabedatum - estland$GEB_DAT) / 365, 2)
@@ -23,12 +23,12 @@
 #    estland$Sex <- as.numeric(factor(estland$Sex))
 #    
 #    # Sample File
-#    source("09_2012_IKP266_Estland/functions.R")
+#    source("Estland/functions.R")
 #    makeSNPTESTv2GenotypeFile(estland[, c(22:24, 26:30)], names(estland)[c(22:24, 26:30)], filename="estland.gen")
 #    makeSNPTESTv2SampleFile(estland[, c(16, 18, 3)], kopf=c("cov1", "cov2", "pheno"), type=c("D", "D", "P"), filename="estland.sample")
 #
 
-# ./snptest_v2.4.1 -data ./09_2012_IKP266_Estland/estland.gen ./09_2012_IKP266_Estland/estland.sample -o ./09_2012_IKP266_Estland/estland.out -frequentist 1 -pheno pheno -cov_all -method score 
+# ./snptest_v2.4.1 -data ./Estland/estland.gen ./Estland/estland.sample -o ./Estland/estland.out -frequentist 1 -pheno pheno -cov_all -method score 
 
 
 #' Erzeuge die Genotyp-Datei für SNPtestv2
