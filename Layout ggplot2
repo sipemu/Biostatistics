@@ -1,0 +1,60 @@
+ggPNG <- function(plot, name) {
+  library(Cairo)
+  CairoPNG(name, width=1500, height=1500)
+  print(plot)
+  dev.off()
+}
+
+ggWMF <- function(plot, name) {
+  swin.metafile(name)
+  print(plot)
+  dev.off()
+}
+
+
+
+ggPubWMF <- function() {
+  library(grid)
+  theme(legend.key=element_rect(colour="white"),
+        legend.key.size = unit(2.5, "cm"),
+        axis.line = element_line(size=.9, color = "black"),
+        legend.position = "top",
+        legend.margin=unit(.1, "cm"),
+        axis.text=element_text(face="bold"),
+        axis.text.x = element_text(vjust = .1),
+        axis.title.y = element_text(face="bold", hjust = .5, vjust = 0.35),
+        axis.title.x = element_text(face="bold", hjust = .5, vjust = -3),
+        axis.ticks = element_line(size = .9), 
+        axis.ticks.x=element_blank(),
+        axis.ticks.length=unit(4, "points"),
+        axis.ticks.margin = unit(.15, "cm"),
+        strip.background=element_rect(size=0, fill="white", colour="white"),
+        strip.text=element_text(face="bold", lineheight=.4),
+        panel.grid.major.y = element_line(size = .5, color = "grey", linetype="dashed"),
+        panel.grid.major.x = element_blank(),
+        panel.margin=unit(1, "cm")
+  )
+}
+
+
+ggPub <- function() {
+  library(grid)
+  theme(legend.key=element_rect(colour="white"),
+        legend.key.size = unit(2.5, "cm"),
+        axis.line = element_line(size=1.1, color = "black"),
+        legend.position = "top",
+        legend.margin=unit(.1, "cm"),
+        axis.text=element_text(face="bold"),
+        axis.text.x = element_text(vjust = .1),
+        axis.title.y = element_text(face="bold", hjust = .5, vjust = 0.15),
+        axis.title.x = element_text(face="bold", hjust = .5, vjust = -3),
+        plot.margin=unit(c(2, 2, 2, 2), "cm"), 
+        axis.ticks = element_line(size = 1.1), 
+        axis.ticks.length=unit(10, "points"),
+        axis.ticks.margin = unit(.25, "cm"),
+        strip.background=element_rect(size=0, fill="white"),
+        strip.text=element_text(face="bold", lineheight=.4),
+        panel.grid.major = element_line(size = .5, color = "grey", linetype="dashed"),
+        panel.margin=unit(1, "cm")
+  )
+}
