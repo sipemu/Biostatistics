@@ -1,22 +1,29 @@
-#' Funktion: ColKEGGPathway
-#' This function downloads the hsa (human) pathway from the website www.kepp.jp 
-#' and color genes. The result is saved as a kgml-file. You can examine this
-#' file e.g. with KEGGtranslator
-#' 
-#' @param Genes   A data.frame with columns:
-#                   $names  : EntrezID of the Genes
-#                   $reg    : values: "up" or "down"
-#' @param KEGGID  String with KEGG ID of the pathway
-#' @param pathout Directory for the result kgml-file
-#' @param colup   html color for up-regulated genes
-#' @param coldown html color for down-regulated genes
-ColKEGGPathway <- function(Genes, KEGGID, pathout, colup="", coldown="") {
+ColKEGGPathway <- function(Genes, KEGGID, pathout, colup="", coldown="", type="hsa") {
+  # ColKEGGPathway:
+  # Die Funktion lÃ¤dt von der Seite www.kepp.jp den hsa (human) Pathway
+  # herunter und entsprechend der eigenen Gene eingefÃ¤rbt und anschlieÃend
+  # lokal als kgml-Datei abgespeichert. Betrachten kann man die kgml-Dateien
+  # beispielsweise mit KEGGtranslator
+  #
+  # Eingabe:
+  #   Genes:    data.frame:
+  #               $names  : die EntrezID der Gene
+  #               $reg    : "up" oder "down"; hoch- oder runterexprimiert
+  #   KEGGID:   String mit der KEGG ID des Pathways
+  #   pathout:  Speicherort fÃ¼r die kgml-Datei
+  #   colup, 
+  #   coldown:  html Farbangaben
+  #
+  # Ausgabe:
+  #   ids:  mehrere Gene kÃ¶nnen einem Knoten in dem PAthway zugeordnet werden,
+  #         diese werden hier mit ausgegeben
+  
   
   library(XML)
   library(stringr)
   
   # Load KEGG-Pathway
-  url <- paste("http://www.genome.jp/kegg-bin/download?entry=hsa", 
+  url <- paste("http://www.genome.jp/kegg-bin/download?entry=",type, "", 
                KEGGID, 
                "&format=kgml", 
                sep="")
@@ -33,11 +40,11 @@ ColKEGGPathway <- function(Genes, KEGGID, pathout, colup="", coldown="") {
   k <- 1
   for (i in 1:n) {
     nodeName <- xmlAttrs (xmltop[[i]])[2]
-    id <- unlist(sapply(Genes$names, function(x) which(str_detect(nodeName, x))))
+    id <- which(unlist(sapply(Genes$names, function(x) str_detect(nodeName, x))))
     if (length(id) > 0) {
       ids[[k]] <- id
       k <- k + 1
-      ifelse (Genes$reg == "up", 
+      ifelse (Genes$reg[id] == "up", 
               xmlAttrs (xmltop[[i]][[1]])[3] <- colup, 
               xmlAttrs (xmltop[[i]][[1]])[3] <- coldown)
     }
