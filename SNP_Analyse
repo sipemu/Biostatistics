@@ -1,0 +1,379 @@
+makeSNPs <- function(data, snp = NULL, snpassoc = TRUE){
+  if (!is.null(snp)){
+    D<-data[, snp]
+    d<-dim(D)[2]
+  } else{
+    d<-dim(data)[2]
+    snp<-1:d
+    D<-data[,snp]
+  }  
+  for (i in 1:d) {
+   x<-as.character(D[,i])
+   y<-as.factor(x)
+   if (nlevels(y)>3)
+	stop('can handle a Max. of 3 different SNP levels')
+   ly<-levels(y)
+   if (ly[1]=="1")
+   ly<-paste(0:(length(ly)-1))
+   #blanks aus Strings raus
+   ly<-gsub(" ","",ly)
+   nc<-nchar(ly)
+   ## Levelbezeichnungen der L?nge 1 verdoppeln
+   wnc<-which(nc==1)
+   ly[wnc]<-paste(ly[wnc],ly[wnc],sep="")
+   #Heterozygotenlevel mit richtigen Allelen bezeichnen
+   ly[which(ly=="11")]<-"02"
+   #Punkte in den Bezeichnungen rausnehmen und Bezeichnungen auf L?nge 1 verk?rzen 
+   if (length(grep("\\.",ly))>0){
+   qp<-lapply(strsplit(ly,"\\."),strsplit,split="")
+   for (j in 1:length(ly)){
+   if(length(qp[[j]])==1)
+   ly[j]<-paste(c(qp[[j]][[1]][[1]],qp[[j]][[1]][[1]]),collapse="")
+   if(length(qp[[j]])==2)
+   ly[j]<-paste(c(qp[[j]][[1]][[1]],qp[[j]][[2]][[1]]),collapse="")
+   }}
+   levels(y)<-ly
+   y<-as.factor(as.character(y))
+   D[,i]<-y
+  }
+  data[,snp]<-D
+  snpdata<-data 
+   if (snpassoc==TRUE){
+    library(SNPassoc)
+    snpdata<-setupSNP(data=data,colSNPs=snp,sep="")
+   }
+  list(data=data,snpdata=snpdata)
+}
+
+
+makeSNPs2<-function(data,snp=NULL,sep="",snpassoc=TRUE){
+if (is.null(snp)){
+snp<-1:dim(data)[2]
+}
+D<-data[,snp]
+d<-dim(D)
+snpdata<-c(NULL)
+for (i in 1:d[2]){
+s<-as.character(D[,i])
+ if (sep!=" "){
+ s<-gsub(" ","",s)
+ }
+nls<-nlevels(as.factor(s))
+if (nls>3){
+stop('can handle a Max. of 3 different SNP levels')
+}
+g<-grep("\\.",s)
+lg<-length(g)
+if (lg>0){
+n<-strsplit(s[g],"\\.")[[1]]
+ln<-length(n)
+if (ln!=2){
+stop('for "."--seperated genotypes can handle only types "A.B" not "A.",".B", "A.B.C." etc.')
+}
+n1<-n[1]
+n2<-n[2]
+wn1<-which(s==n1)
+wn2<-which(s==n2)
+wn3<-which(s==s[g][1])
+S<-rep(NA,length(s))
+if (nchar(n1)>1){
+n1<-strsplit(n1,split="")[[1]][1]
+}
+if (nchar(n2)>1){
+n2<-strsplit(n2,split="")[[1]][1]
+}
+if (n1==n2){
+n2<-"?"
+}
+S[wn1]<-paste(c(n1,n1),collapse="")
+S[wn2]<-paste(c(n2,n2),collapse="")
+S[wn3]<-paste(c(n1,n2),collapse="")
+s<-S
+}
+ls<-levels(as.factor(s))
+nc<-nchar(ls)
+if (any(nc<2)){
+wnc<-which(nc==1)
+lwnc<-length(wnc)
+for (j in 1:lwnc){
+ww<-which(s==ls[wnc[j]])
+s[ww]<-paste(rep(ls[wnc[j]],2),collapse="")
+}
+}
+snpdata<-cbind(snpdata,s)
+}
+colnames(snpdata)<- colnames(data[,snp])
+sd<-setdiff(1:dim(data)[2],snp)
+if (length(sd)>0){
+snpData<-data
+snpData[,snp]<-snpdata
+snpdata<-snpData
+}
+SnpData<-snpnum<-as.data.frame(snpdata)
+for (i in 1:d[2]){
+SnpData[,snp[i]]<-as.factor(snpdata[,snp[i]])
+sn<-as.numeric(SnpData[,snp[i]])-1
+if (length(which(sn==0))<length(which(sn==2))){
+sn<-2-sn
+}
+ssn<-as.factor(sn)
+lsn<-length(levels(ssn))
+ssm<-summary(ssn)
+if (lsn==2 && ssm[1]<ssm[2]){
+spl<-strsplit(levels(SnpData[,snp[i]]),split="")
+a1<-diff(as.numeric(as.factor(spl[[1]])))
+a2<-diff(as.numeric(as.factor(spl[[2]])))
+if (a2==0 && abs(a1)==1){
+sn<-1-sn}
+}
+if (lsn==3 && ssm[1]<ssm[3]){
+sn<-2-sn
+}
+snpnum[,snp[i]]<-as.factor(sn)
+}
+ if (snpassoc==TRUE){
+  library(SNPassoc)
+  Snpdata<-setupSNP(data=snpdata,colSNPs=snp,sep=sep)
+ }
+list(snpchar=snpdata,snpass=Snpdata,snpfac=SnpData,snpnum=snpnum)
+}
+
+
+Mhplot_min <- function(matrix, chr, main="Manhattan-Plot", models=1:4, pos=c(4,1), genmod=c("codominant", "dominant", "recessive", "log-additive"), pchm=c(1,2,6,3), cut=FALSE,xthresh=-2*10^4, equal=FALSE, zus=NULL) {
+	#Funktion zur Darstellung von Manhattan-Plots; pro SNP Darstellung des Minimums ?ber mehrere genetische Modelle
+	#
+	# Eingabe:
+	#	matrix	: Matrix mit p-Werten mit SNPs in Spalten und genetischen Modellen in Zeilen
+	#	chr		: Charakter-Vektor mit Daten zu SNP-Chromosomen
+	#	models	: Zeilen der Matrix ?ber die Minimum gebildet werden soll
+	#	pos		: Position des Texts zum SNP-Labeling f?r  Top10-SNPs mit kleinsten Minima ?ber p-Werten
+	#	genmod	: Zu den Zeilen der Matrix zugeh?rige Namen der genetischen Modelle
+	#	pchm	: Plot-Symbol f?r SNPs zur Darstellung der verschiedenen genetischen Modelle (pro SNP: Wahl des Plotsymbols zugeh?rig zu genetischem Modell mit dem minimalen p-Wert)
+	#	cut		: TRUE Nur 2.5% der kleinsten p-Werte werden geplottet, das dient dem schnelleren Bildaufbau
+	#
+	
+	matrix <- matrix[models, ]
+	vector <- apply(matrix, 2, min, na.rm=T)
+	cutoff <- 1
+	if (cut) {
+		p <- seq(0, 1, by=0.025)
+		cutoff <- 10^(-quantile(log(vector, 10), probs=p)[2])
+	}
+	pch <- rep(NA, length(vector))
+	winf <- which(vector != Inf)
+	vector[setdiff(1:length(vector), winf)] <- NA
+	z <- apply(matrix[, winf], 2, which.min)
+	pch[winf] <- pchm[models][z]
+	if(!is.null(zus)) {
+		id2 <- which(zus == 1)
+		
+		# 1er tauschen
+		id1 <- which(pch == 1)
+		id <- intersect(id1, id2)
+		pch[id] <- 21
+		
+		#2er tauschen
+		id1 <- which(pch == 2)
+		id <- intersect(id1, id2)
+		pch[id] <- 24
+		
+		#6er tauschen
+		id1 <- which(pch == 6)
+		id <- intersect(id1, id2)
+		pch[id] <- 25
+	}
+	
+	if (equal) {
+		mhplotEqualSpaced(vector=vector,chr=chr,pch=pch,models=models,main=main,pos=pos,genmod=genmod,pchm=pchm, cutoff=cutoff,xthresh=xthresh)
+	} else {
+		mhplot(vector=vector, chr=chr, pch=pch, models=models, main=main, pos=pos, genmod=genmod, pchm=pchm, cutoff=cutoff, xthresh=xthresh)
+	}
+}
+
+mhplot <- function(vector, chr, pch=19, models=1:4, pos=c(4,1), pchm=c(1,2,6,3), main="Manhattan-Plot", genmod=c("codominant","dominant","recessive","log-additive"), col=c("black","red1","blue1","grey50","orange","green3","purple","wheat4","brown","royalblue3","darksalmon","darkseagreen3","deepskyblue","seashell4","violetred","darkolivegreen","tomato","dodgerblue3","chartreuse3","plum4","lightblue","orangered","pink","darkcyan"), cutoff=1, xthresh=-2*10^4) {
+	#Funktion zur Darstellung von Manhattan-Plots
+	#
+	# Eingabe:
+	#	vector		: numerischer Vektor mit p-Werten
+	#	chr			: Charakter-Vektor mit Daten zu SNP-Chromosomen
+	#	genmod		: Charakter-Vektor mit zur Auswahl stehende genetische Modelle  
+	#	models		: Numerischer Vektor mit Positionen in genmod, die tats?chlich betrachtete genetische Modelle angeben (nur fuer labeling).
+	#	pos			: Position des Texts zum SNP-Labeling f?r  Top10-SNPs mit kleinsten Minima ?ber p-Werten
+	#	col			: Farbe pro Chromosom
+	#	pch, main	: wie f?r Standard-Plot 
+	#
+	par(oma=c(0, 0, 0, 0), mar=c(5, 5, 3, 0) + 0.1)
+	if (nlevels(chr) == 24) {
+		chrcol <- factor(chr)
+		col <- col[c(1, 10:19, 2, 20:22, 3:9, 23:24)]
+		levels(chrcol) <- col
+	} else {
+		n.col <- length(colors())
+		chrcol <- factor(chr)
+		col <- colors()[seq(1, n.col, length=nlevels(chr))]
+		levels(chrcol) <- col
+	}
+	y <- 1:length(vector)
+	b <- -floor(min(log(vector, 10), na.rm=T))
+	plot(1 / vector, col=as.character(chrcol), log="y", xaxt="n", yaxt="n", xlab="", sub="Chromosome", ylab=expression(paste("-", log[10], "(P-Value)")), cex.lab=2, cex.sub=2, pch=pch, main=main, cex.main=2.5, xlim=c(xthresh, max(y)), ylim=c(cutoff, 10^b), bg="black")
+	a <- aggregate(y, list(chrcol), mean)
+	axis(1, a[, 2], levels(chr), cex.axis=1.5, las=2)
+	axis(2, 10^(0:b), 0:b, las=2, cex.axis=1.5)
+	ov <- order(vector)[1:10]
+	sv <- vector[ov]
+	sy <- y[ov]
+	lines(c(-4*10^4,330500), rep(length(vector) / 0.05, 2), lty=4, col="grey75")
+	legend(-3*10^4, 1.25*10^b, genmod[models], pch=pchm[models], title="Genetic model:", cex=1.25, bg="white")
+	text(330500, length(vector) / 0.05*0.8, "Bonferroni", pos=2, col="grey75", cex=0.75)
+	text(330500, length(vector) / 0.05*0.5, "correction", pos=2, col="grey75", cex=0.75)
+	text(sy, 1 / sv, names(sv), pos=pos, adj=0.25, cex=0.75, col=as.character(chrcol)[ov], offset=0.5)
+}
+
+mhplotEqualSpaced <- function(vector, chr, pch=19, models=1:4, pos=c(4,1), pchm=c(1,2,6,3), main="Manhattan-Plot", genmod=c("codominant","dominant","recessive","log-additive"), col=c("black","red1","blue1","grey50","orange","green3","purple","wheat4","brown","royalblue3","darksalmon","darkseagreen3","deepskyblue","seashell4","violetred","darkolivegreen","tomato","dodgerblue3","chartreuse3","plum4","lightblue","orangered","pink","darkcyan"), cutoff=1,xthresh=-2*10^4) {
+  #Funktion zur Darstellung von Manhattan-Plots
+  #
+  # Eingabe:
+  #	vector		: numerischer Vektor mit p-Werten
+  #	chr			: Charakter-Vektor mit Daten zu SNP-Chromosomen
+  #	genmod		: Charakter-Vektor mit zur Auswahl stehende genetische Modelle  
+  #	models		: Numerischer Vektor mit Positionen in genmod, die tats?chlich betrachtete genetische Modelle angeben (nur f?r labeling).
+  #	pos			: Position des Texts zum SNP-Labeling f?r  Top10-SNPs mit kleinsten Minima ?ber p-Werten
+  #	col			: Farbe pro Chromosom
+  #	pch, main	: wie f?r Standard-Plot 
+  #
+  par(oma=c(0, 0, 0, 0), mar=c(5, 5, 3, 0) + 0.1)
+  if (length(chr) == 24) {
+    chrcol <- factor(chr)
+    col <- col[c(1, 10:19, 2, 20:22, 3:9, 23:24)]
+    levels(chrcol) <- col
+  } else {
+    n.col <- length(colors())
+    chrcol <- factor(chr)
+    col <- colors()[seq(30, n.col, length=nlevels(chr))]
+    levels(chrcol) <- col
+  }
+  y <- 1:length(vector)
+  b <- -floor(min(log(vector, 10), na.rm=T))
+  
+  s.xax <- nlevels(chr) + 1
+  s <- seq(1/(2*s.xax), 1 - 1/(2*s.xax), length=s.xax-1)
+  x <- rep(0, length(chr))
+  for (i in 1:nlevels(chrcol)) {
+    id <- which(chr == levels(chr)[i])
+    x[id] <- s[i] 
+  }
+  plot(x, 1 / vector, col=as.character(chrcol), log="y", xaxt="n", yaxt="n", xlab="", sub=" ", ylab=expression(paste("-", log[10], "(P-Value)")), cex.lab=2, cex.sub=2, pch=pch, main=main, cex.main=2.5, ylim=c(cutoff, 10^b), xlim=c(0, 1))
+  
+  axis(1, s, levels(chr), cex.axis=1, las=2)
+  axis(2, 10^(0:b), 0:b, las=2, cex.axis=1.5)
+  ov <- order(vector)[1:10]
+  sv <- vector[ov]
+  sy <- y[ov]
+  lines(c(-4*10^4,330500), rep(length(vector) / 0.05, 2), lty=4, col="grey75")
+  legend(-0.01, 1.25*10^b, genmod[models], pch=pchm[models], title="Genetic model:", cex=1, bg="white")
+  text(330500, length(vector) / 0.05*0.8, "Bonferroni", pos=2, col="grey75", cex=0.75)
+  text(330500, length(vector) / 0.05*0.5, "correction", pos=2, col="grey75", cex=0.75)
+  text(x[ov], 1 / sv, names(sv), pos=pos, adj=0.25, cex=0.75, col=as.character(chrcol)[ov], offset=0.5)
+}
+
+imputationplot <- function(pvalues, genpos, imputed, pch=19, col=c("red3", "steelblue"), main="Manhattan-Plot", cutoff=1, models=1:3, pos=c(4,1), genmod=c("recessive", "dominant", "log-additive"), pchm=c(6,2,3),n =10) {
+ par(oma=c(0, 0, 0, 0), mar=c(5, 5, 3, 0) + 1)
+ y <- 1:length(pvalues)
+ b <- -floor(min(log(pvalues, 10), na.rm=T))
+ col.i <- imputed
+ levels(col.i) <- col
+ col.i <- as.character(col.i)
+ plot(genpos, 1 / pvalues, col=col.i, log="y", yaxt="n", xlab="", sub="Genomic Position", ylab=expression(paste("-", log[10], "(P-Value)")), cex.lab=2, cex.sub=2, pch=pch, main=main, cex.main=2.5, ylim=c(cutoff, 10^b), cex.axis=1.5, bg=col.i)
+ axis(2, 10^(0:b), 0:b, las=2, cex.axis=1.5)
+ legend(min(genpos, na.rm=T), 1.25*10^b, levels(imputed), pch=19, col=col)	
+ legend(max(genpos, na.rm=T)*0.99, 1.25*10^b, genmod[models], pch=pchm[models], title="Genetic model:", cex=1.25, bg="white", xjust=1)
+ 	ov <- order(pvalues)[1:n]
+	sv <- pvalues[ov]
+	sy <- genpos[ov]
+	print(sy)
+	print(sv)
+	text(sy, 1 / sv, names(sv), pos=pos, adj=0.25, cex=0.75, col=as.character(col.i)[ov], offset=0.5)
+}
+
+Imputationplot <- function(matrix, imputed, main="Manhattan-Plot: Minimum of 3 genetic models", models=3:5, pos=c(4,1), genmod=c("recessive", "dominant", "log-additive"), pchm=c(6,2,3), n=10) {
+  nam <- matrix[1,]
+  genpos <- as.numeric(matrix[2,])
+  matrix <- matrix[models, ]
+  z <- vector <- rep(NA,ncol(matrix))
+  for (i in 1:ncol(matrix)) {
+    amn <- as.numeric(matrix[ , i])
+    if (!all(is.na(amn))) {
+      vector[i] <- min(amn, na.rm=T)
+      z[i] <- which.min(amn)
+# keine Ahnung was das soll? Simon
+#       if (amn[2] == vector[i]) {
+#         z[i] <- 2
+#       }
+    }
+  }
+  cutoff <- 1
+  pch <- rep(NA, length(vector))
+  pch[!is.na(vector)] <- pchm[models-2][z[!is.na(vector)]]
+  names(vector) <- nam
+  pch2 <- as.factor(pch[which(imputed==levels(imputed)[1])])
+  ll <- levels(pch2)
+  ll[ll=="6"] <- "25"
+  ll[ll=="2"] <- "24"
+  levels(pch2) <- ll
+  pch[which(imputed == levels(imputed)[1])] <- as.numeric(as.character(pch2))
+  imputationplot(pvalues = vector, 
+                 genpos  = genpos, 
+                 imputed = imputed, 
+                 pch     = pch, 
+                 models  = models - 2, 
+                 main    = main, 
+                 pos     = pos, 
+                 genmod  = genmod, 
+                 pchm    = pchm, 
+                 n       = n)
+}
+
+mafhwe<-function(S,snps=NULL){
+#minor allele frequency and HWE p-Wert
+#S: Objekt aus makeSNPs
+if (is.null(snps))
+snps<-1:ncol(S$data)
+S$snpdata<-S$snpdata[,snps]
+S$data<-S$data[,snps]
+A<-summary(S$snpdata)
+minor.allele.freq<-100-A[,2]
+a<-cbind(A,minor.allele.freq)
+nu<-summary(S$data)
+LS<-list(NULL)
+ for (i in 1:ncol(S$snpdata)){
+  LS[[i]]<-summary(S$snpdata[,i])$geno[,1]
+  }
+names(LS)<-colnames(S$snpdata)
+HWE2<-sapply(LS,hwe)
+b<-cbind(a,HWE2)
+B<-cbind(rownames(b),b[,c(1,5,4,3,6)])
+colnames(B)<-c("SNPs","alleles","minor.allele.freq [%]","missing [%]","HWE","HWE2")
+rownames(B)<-NULL
+B
+}
+
+MAFHWE<-function(S,snps=NULL){
+#minor allele frequency and HWE p-Wert
+#setupSNP-Objekt
+A<-summary(S)
+minor.allele.freq<-100-A[,2]
+a<-cbind(A,minor.allele.freq)
+n<-nrow(A)
+N<-ncol(S)
+LS<-list(NULL)
+ for (i in (N-n+1):N){
+  LS[[i-(N-n)]]<-summary(S[,i])$geno[,1]
+  }
+names(LS)<-colnames(S[(N-n+1):N])
+HWE2<-sapply(LS,hwe)
+b<-cbind(a,HWE2)
+B<-cbind(rownames(b),b[,c(1,5,4,3,6)])
+colnames(B)<-c("SNPs","alleles","minor.allele.freq [%]","missing [%]","HWE","HWE2")
+rownames(B)<-NULL
+B
+}
