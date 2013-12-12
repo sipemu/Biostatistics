@@ -1,0 +1,847 @@
+NonparaAssociation2 <- function(y, data) {
+  #Mit Kruskal-Wallis/Wilcoxon-Tests
+  #wie NonparaAssociation, nur anderen Tests-Varianten:
+  #Asymptotische statt exakte Wilcoxon-Tests, falls zu viele Variablen
+  #Statt Korrelationstest: Independence tests
+  library(coin)
+  if (class(data)[1] != "setupSNP") {
+    stop("Require setupSNP object")
+  }
+  if (length(y) != nrow(data)) {
+    stop("length(y) != nrow(data)") 
+  }
+  s <- summary(data)
+  r <- rownames(s)
+  lr <- length(r) 
+  nd <- ncol(data)
+  P <- c(NULL)
+  wy <- which(!is.na(y))
+  y <- y[wy]
+  #
+  dist1 <- "exact"
+  if (length(y) > 500) {
+    dist1 <- "asymptotic"
+  }
+  
+  for (i in 1:lr) {
+    x <- data[wy, nd + 1 - i]
+    nx <- nlevels(as.factor(as.character(x)))
+    cod <- codominant(x)
+    p <- rep(NA, 4)
+    if (nx == 3) {
+       rec <- recessive(x)
+       dom <- dominant(x)
+       add <- as.ordered(additive(x))
+       levels(add) <- 1:nlevels(add)
+       add <- as.numeric(as.character(add))
+       if (is.numeric(y))
+          p <- c(pvalue(kruskal_test(y ~ cod)),
+                 pvalue(wilcox_test(y ~ dom, dist = dist1)),
+                 pvalue(wilcox_test(y ~ rec, dist = dist1)),
+                 cor.test(y, add, method = "s", exact = F)$p.value)
+       if (is.factor(y))
+          p <- c(fisher.test(y, cod, workspace=2^22)$p.value,
+                 fisher.test(y, dom, workspace=2^22)$p.value,
+                 fisher.test(y, rec, workspace=2^22)$p.value,
+                 pvalue(independence_test(y ~ as.ordered(add))))
+    }
+    if (nx == 2) {
+     if (is.numeric(y))
+      p <- c(pvalue(wilcox_test(y ~ cod)), rep(NA, 3))
+     if (is.factor(y))
+      p <- c(fisher.test(y, cod)$p.value, rep(NA, 3))
+    }
+    P <- rbind(p, P) 
+   }
+
+  rownames(P) <- r
+  colnames(P) <- c("codominant", "dominant", "recessive", "additive")
+  P
+}
+
+
+WGnpstats <- function(data, plcSNPs, plcRSP, pvalues) {
+  # data: SNP
+  library(quantreg)
+  nSNPs <- length(plcSNPs)
+  nRSP <- length(plcRSP)
+  
+  # schleife Ã¼ber SNPs
+  SNPs_df <- data.frame()
+  for (i in 1:nSNPs) {
+    # berechne Indizes
+    lvls <- levels(data[ , plcSNPs[i]])
+    hom1_ind <- which(data[, plcSNPs[i]] == lvls[1])
+    hom2_ind <- which(data[, plcSNPs[i]] == lvls[3])
+    het_ind <- which(data[, plcSNPs[i]] == lvls[2])
+    
+    # sortieren nach hÃ¤ufigkeit hom1_ind == major homo.
+    if (length(hom1_ind) < length(hom2_ind)) {
+      # vertausche indizes
+      tmp <- hom1_ind
+      hom1_ind <- hom2_ind
+      hom2_ind <- tmp
+      # vertausche bezeichnungen
+      tmp <- lvls[1]
+      lvls[1] <- lvls[3]
+      lvls[3] <- tmp
+    }
+    
+    if (length(lvls) < 3) {
+      n <- length(lvls)
+      lvls <- c(lvls, rep(NA, 3 - n))
+    }
+    # Schleife Ã¼ber abh. Variable
+    rsp_df <- data.frame()
+    for (j in 1:nRSP) {
+      tab_df <- data.frame()
+      ###
+      # Fall 1: codominant
+      ###
+      tmp_df <- data.frame(SNPs = rep(NA, 4), gen.model = rep(NA, 4), 
+                           n = rep(NA, 4), median = rep(NA, 4), 
+                           diff = rep(NA, 4), pWert = rep(NA, 4))
+      # berechne mediane
+      med1_codom <- median(data[hom1_ind, plcRSP[j]], na.rm = TRUE)
+      med2_codom <- median(data[het_ind, plcRSP[j]], na.rm = TRUE)
+      med3_codom <- median(data[hom2_ind, plcRSP[j]], na.rm = TRUE)
+      
+      # schreibe data frame
+      if ( j == 1) {
+        tmp_df$SNPs[1] <- names(data)[plcSNPs[i]] # name des SNPs
+      }
+      tmp_df$gen.model <- c("codominant", lvls) # gen. modell
+      tmp_df$n[2:4] <- c(length(hom1_ind), length(het_ind), length(hom2_ind)) # Anzahl
+      tmp_df$median[2:4] <- c(med1_codom, med2_codom, med3_codom)
+      tmp_df$diff[2:4] <- c(0.0, med2_codom - med1_codom, 
+                              med3_codom - med1_codom) # differenz
+      tmp_df$pWert[2] <- as.numeric(as.character(pvalues[i + 1, 4 * (j - 1) + 1]))
+      
+      # zwischenspeicher
+      tab_df <- rbind(tab_df, tmp_df)
+      
+      
+      ###
+      # Fall 2: Dominant
+      ###
+      tmp_df <- data.frame(SNPs = rep(NA, 3), gen.model = rep(NA, 3), 
+                           n = rep(NA, 3), median = rep(NA, 3), 
+                           diff = rep(NA, 3), pWert = rep(NA, 3))
+      # berechne mediane
+      med1_codom <- median(data[hom1_ind, plcRSP[j]], na.rm = TRUE)
+      med3_codom <- median(data[c(het_ind, hom2_ind), plcRSP[j]], na.rm = TRUE)
+      
+      # schreibe data frame
+      tmp_df$gen.model <- c("Dominant", lvls[1], 
+                            paste(lvls[2], lvls[3], sep = "-" )) # gen. modell
+      tmp_df$n[2:3] <- c(length(hom1_ind), length(c(het_ind, hom2_ind))) # Anzahl
+      tmp_df$median[2:3] <- c(med1_codom, med3_codom)
+      tmp_df$diff[2:3] <- c(0.0, med3_codom - med1_codom)
+      tmp_df$pWert[2] <- as.numeric(as.character(pvalues[i + 1, 4 * (j - 1) + 2]))
+      
+      # zwischenspeicher
+      tab_df <- rbind(tab_df, tmp_df)
+      
+      
+      ###
+      # Fall 2: Recessive
+      ###
+      tmp_df <- data.frame(SNPs = rep(NA, 3), gen.model = rep(NA, 3), 
+                           n = rep(NA, 3), median = rep(NA, 3), 
+                           diff = rep(NA, 3), pWert = rep(NA, 3))
+      # berechne mediane
+      med1_codom <- median(data[c(het_ind, hom1_ind), plcRSP[j]], na.rm = TRUE)
+      med3_codom <- median(data[hom2_ind, plcRSP[j]], na.rm = TRUE)
+      
+      # schreibe data frame
+      tmp_df$gen.model <- c("Rezessive", paste(lvls[1], lvls[2], sep = "-" ), 
+                            lvls[3]) # gen. modell
+      tmp_df$n[2:3] <- c(length(c(het_ind, hom1_ind)), length(hom2_ind)) # Anzahl
+      tmp_df$median[2:3] <- c(med1_codom, med3_codom)
+      tmp_df$diff[2:3] <- c(0.0, med3_codom - med1_codom)
+      tmp_df$pWert[2] <- as.numeric(as.character(pvalues[i + 1, 4 * (j - 1) + 3]))
+      
+      # zwischenspeicher
+      tab_df <- rbind(tab_df, tmp_df)
+      
+      
+      ###
+      # Fall 2: log-Additive
+      ###
+      tmp_df <- data.frame(SNPs = rep(NA, 3), gen.model = rep(NA, 3), 
+                           n = rep(NA, 3), median = rep(NA, 3), 
+                           diff = rep(NA, 3), pWert = rep(NA, 3))
+      
+      x <- rq(data[, plcRSP[j]] ~ additive(data[, plcSNPs[i]]))
+      
+      
+      # schreibe data frame
+      tmp_df$gen.model[1] <- "log-Additive" # gen. modell
+      tmp_df$gen.model[2] <- c("0,1,2")
+      tmp_df$diff[2] <- coefficients(x)[2]
+
+      tmp_df$n[2] <- length(c(het_ind, hom1_ind, hom2_ind))
+      tmp_df$pWert[2] <- as.numeric(coefficients(summary(x, se = "boot", R = 500))[2, 4])
+
+      # zwischenspeicher
+      tab_df <- rbind(tab_df, tmp_df)
+      colnames(tab_df) <- (6 * (j - 1) + 1):(6 * (j - 1) + 6)
+      
+      if (j == 1) {
+        rsp_df <- tab_df
+      } else {
+        rsp_df <- cbind(rsp_df, tab_df)
+      }
+      
+    }
+    if (i == 1) {
+      SNPs_df <- rsp_df
+    } else {
+      SNPs_df <- rbind(SNPs_df, rsp_df)
+    }
+    
+  }
+  SNPs_df
+}
+
+
+nonparass<-function(Y, data) {
+  n <- ncol(Y)
+  P <- cp <- c(NULL)
+  for (i in 1:n) {
+    p <- NonparaAssociation2(Y[,i], data)
+    p <- rbind(colnames(p), p)
+    cp <- c(cp, rep(colnames(Y)[i], 4))
+    P <- cbind(P, p)
+  }
+  colnames(P) <- cp
+  P <- cbind(rownames(P), P)
+  colnames(P)[1] <- " "
+  colnames(P) <- 1:ncol(P)
+  as.data.frame(P)
+}
+
+WG2groups<-function(X,method="holm"){
+Y<-as.data.frame(X)[,c(2:4,6)]
+W<-WGstats(X)
+ for (i in 2:4){
+  wx<-which(is.na(Y[,i]))
+  Y[wx,i]<-Y[wx,1]
+ }
+p<-apply(Y,2,p.adjust,method=method)
+p[is.na(Y)]<-NA
+RB<-c(NULL)
+for (i in 1:length(W)){
+if (nrow(W[[i]])==15){
+cod<-as.data.frame(t(apply(W[[i]][2:4,],1,col2groups)))
+dom<-as.data.frame(t(apply(W[[i]][6:7,],1,col2groups)))
+rec<-as.data.frame(t(apply(W[[i]][9:10,],1,col2groups)))
+add<-t(as.data.frame(col2groups(W[[i]][15,])))
+}
+else{
+cod<-as.data.frame(rbind(t(apply(W[[i]][2:3,],1,col2groups)),rep(NA,4)))
+dom<-rec<-as.data.frame(matrix(rep(NA,8),2,4))
+colnames(dom)<-colnames(rec)<-colnames(cod)
+add<-t(as.data.frame(col2groups(W[[i]][5,])))
+}
+rb<-rbind(cod,dom,rec,add)
+qrb<-rownames(rb)
+qrb<-gsub("1","",qrb)
+qrb[length(qrb)]<-"0,1,2"
+rownames(rb)<-NULL
+rb<-cbind(qrb,rb)
+colnames(rb)[1]<-" "
+RB<-rbind(RB,rb)
+}
+RB[,5]<-as.numeric(as.character(RB[,5]))
+xx<-8*(0:(nrow(RB)/8-1))
+yy<-c(xx+1,xx+4,xx+6,xx+8)
+yy<-sort(yy)
+RB[yy,5]<-as.vector(t(as.matrix(Y)))
+pay<-as.vector(t(as.matrix(p)))
+RB<-cbind(RB,rep(NA,nrow(RB)))
+RB[yy,6]<-pay
+colnames(RB)[6]<-"adj. p-Wert"
+RB<-cbind(rep(NA,nrow(RB)),rep(NA,nrow(RB)),RB)
+RB[xx+1,1]<-names(W)
+RB[yy,2]<-colnames(Y)
+colnames(RB)[1:2]<-c("SNP","gen. Modell")
+RB<-RB[which(!is.na(RB[,6])),]
+as.data.frame(RB)
+}
+
+
+WGcont<-function(X,method="holm",log=T){
+Y<-as.data.frame(X)[,c(2:4,6)]
+W<-WGstats(X)
+ for (i in 2:4){
+  wx<-which(is.na(Y[,i]))
+  if (length(wx)>0)
+  Y[wx,i]<-Y[wx,1]
+ }
+p<-apply(Y,2,p.adjust,method=method)
+p[is.na(Y)]<-NA
+RB<-c(NULL)
+for (i in 1:length(W)){
+if (nrow(W[[i]])==15){
+cod<-as.data.frame(t(apply(W[[i]][2:4,],1,col2cont,log=log)))
+dom<-as.data.frame(t(apply(W[[i]][6:7,],1,col2cont,log=log)))
+rec<-as.data.frame(t(apply(W[[i]][9:10,],1,col2cont,log=log)))
+add<-t(as.data.frame(col2cont(W[[i]][15,],log=log)))
+add[1]<-sum(W[[i]][2:4,1])
+}
+else{
+cod<-as.data.frame(rbind(t(apply(W[[i]][2:3,],1,col2cont,log=log)),rep(NA,3)))
+dom<-rec<-as.data.frame(matrix(rep(NA,6),2,3))
+colnames(dom)<-colnames(rec)<-colnames(cod)
+add<-t(as.data.frame(col2cont(W[[i]][5,],log=log)))
+add[1]<-sum(W[[i]][2:3,1])
+}
+rb<-rbind(cod,dom,rec,add)
+qrb<-rownames(rb)
+qrb<-gsub("1","",qrb)
+qrb[length(qrb)]<-"0,1,2"
+rownames(rb)<-NULL
+rb<-cbind(qrb,rb)
+colnames(rb)[1]<-" "
+RB<-rbind(RB,rb)
+}
+RB[,4]<-as.numeric(as.character(RB[,4]))
+xx<-8*(0:(nrow(RB)/8-1))
+yy<-c(xx+1,xx+4,xx+6,xx+8)
+yy<-sort(yy)
+RB[yy,4]<-as.vector(t(as.matrix(Y)))
+pay<-as.vector(t(as.matrix(p)))
+RB<-cbind(RB,rep(NA,nrow(RB)))
+RB[yy,ncol(RB)]<-pay
+colnames(RB)[ncol(RB)]<-"adj. p-Wert"
+RB<-cbind(rep(NA,nrow(RB)),rep(NA,nrow(RB)),RB)
+RB[xx+1,1]<-names(W)
+RB[yy,2]<-colnames(Y)
+colnames(RB)[1:2]<-c("SNP","gen. Modell")
+RB<-RB[which(!is.na(RB$n)),]
+as.data.frame(RB)
+}
+
+col2groups<-function(x){
+k1<-paste(x[1]," (",x[2],"%)",sep="")
+k2<-paste(x[3]," (",x[4],"%)",sep="")
+if (any(is.na(x[6:7]))){
+ if (all(is.na(x[6:7]))){
+ k3<-paste(x[5],sep="")
+ }
+ else{
+ x[5:7][which(is.na(x[5:7]))]<-"-"
+ k3<-paste(x[5]," [",x[6],",",x[7],"]",sep="")
+ }
+}
+else{
+ k3<-paste(x[5]," [",x[6],",",x[7],"]",sep="")
+}
+p<-x[8]
+y<-c(k1,k2,k3,p)
+names(y)<-c("0 (%)","1 (%)","OR [95% CI]","unadj. p-Wert")
+y
+}
+
+col2cont<-function(x,log=T){ 
+if (log==T){
+q<-round(exp(x[4:6]),2)}
+else{    
+q<-round(x[4:6],2)
+}
+if (any(is.na(q[2:3]))){
+mci<-paste(q[1])
+}
+else{
+mci<-paste(q[1]," [",paste(q[2:3],collapse=","),"]",sep="")
+}
+y<-c(x[1],mci,x[7])
+if (log==T){
+names(y)<-c("n","Fold change [95% CI]","unadj. p-Wert")
+}
+else{
+names(y)<-c("n","Diff. [95% CI]","unadj. p-Wert")
+}
+y
+}
+
+npUnivSNPassoc <- function(y, data, dist = "asymptotic", ncores = 8){
+  # Nichtparametrische univariate SNP-Assoziationsanalyse
+  #
+  # Args:
+  #   y      : AbhÃ¤ngige numerische Variable mit LÃ¤nge m (=Fallzahl)
+  #   data   : SNP-Matrix mit Dimension m x n; n (=Anzahl SNPs); setupSNP-object
+  #            ACHTUNG: hier duerfen nur SNP-Daten enthalten sein
+  #   dist   : 
+  #   ncores : Anzahl der Kerne
+  #            ACHTUNG: Zu viele Kerne kuennen den Arbeitsspeicher ueberlaufen
+  #                     lassen; dadurch verliert man den Vorteil des parallelen
+  #                     Rechnens
+  #
+  # Return:
+  #   p-Wert Matrix mit Dim. 4 x n
+  #
+  # Anmerkung:
+  #   Mit Kruskal-Wallis/Wilcoxon-Tests
+  #   wie NonparaAssociation2, nur anderen Tests-Varianten:
+  #   Immer asymptotische statt exakte Wilcoxon-Tests
+  #   Statt Korrelationstest: Independence tests
+  #
+  # Pakete:
+  #   coin, SNPassoc, doSNOW, foreach
+  if (class(data)[1] != "setupSNP")
+    stop("Require setupSNP object")
+  if (length(y) != nrow(data))
+    stop("length(y)!=nrow(data)")
+  
+  lr <- nd <- ncol(data)
+  P <- c(NULL)
+  wy <- which(!is.na(y))
+  y <- y[wy]
+
+  # erstelle fÃ¼r jeden Prozessor sein Paket. 
+  # Dadurch wird die EffektivitÃ¤t des doSNOW-Pakets 
+  # stark (bis zu 6-mal schneller) erhÃ¶ht.
+  batch <- floor(seq(1, lr + 1, length = ncores + 1))
+  
+	### Boilerplate to set up parallel computing
+	library("foreach")
+	library("iterators")
+	library("parallel")
+	if (exists("cl") && is(cl, "cluster")) {
+	  stopCluster(cl)
+	}
+	cl <- makeCluster(ncores, type="SOCK", homogeneous=TRUE, useXDR=FALSE)
+	library("doParallel")
+	registerDoParallel(cl)
+  # jedem Prozessor wird sein Paket zugeteilt, welches er dann abarbeitet
+  P <- foreach(i = 1:ncores, .combine = rbind, .packages = c("SNPassoc", "coin", "log4r")) %dopar% {
+			source("X:/KG/Mathe/Rfunctions/NonparaSNPs.R")
+			logger <- create.logger(logfile = "SNPs.log", level = log4r:::DEBUG)
+			sb <- seq(batch[i], batch[i + 1] - 1, by = 1)
+			tmp <- c(NULL)
+			for (k in sb) {				
+				x <- data[wy, nd - lr + k]
+				nx <- nlevels(as.factor(as.character(x)))
+				cod <- codominant(x)
+				p <- rep(NA, 3)
+				log4r::info(logger, paste(k, nx))
+				if (nx == 3){
+					rec <- recessive(x)
+					dom <- dominant(x)
+					add <- as.ordered(additive(x))
+					levels(add) <- 1:nlevels(add)
+					add <- as.numeric(as.character(add))
+					p <- c(pvalue(wilcox_test(y ~ dom, dist = dist)),
+						   pvalue(wilcox_test(y ~ rec, dist = dist)),
+						   cor.test(y, add, method = "s", exact = F)$p.value)
+				} 
+				if (nx == 2) {
+					p1 <- pvalue(wilcox_test(y ~ cod, dist = dist))
+					p <- rep(p1, 3)
+				}
+				tmp <- rbind(tmp, p)
+			}
+		
+		return(tmp)
+		}
+  stopCluster(cl) # stoppe Cluster
+  colnames(P) <- c("dominant", "recessive", "additive")
+  rownames(P) <- colnames(data)
+  P
+}
+
+nu<-function(x,y,dist=dist){
+p<-NA  
+ if (sum(!is.na(x))>1 && nlevels(as.factor(x[!is.na(x)]))>1){
+  t<-table(x,y)
+  if (min(rowSums(t))>0 && min(colSums(t))>0){
+   require(coin)
+   x<-as.ordered(x)
+   p<-pvalue(independence_test(y~x,dist=dist))
+  }
+ }
+p
+}
+ 
+
+v<-function(y,data, dist = "asymptotic", ncores = 8){
+  lr <- nd <- nrow(data) 
+  P <- c(NULL)
+  # erstelle fÃ¼r jeden Prozessor sein Paket. 
+  # Dadurch wird die EffektivitÃ¤t des doSNOW-Pakets 
+  # stark (bis zu 6-mal schneller) erhÃ¶ht.
+  batch <- floor(seq(1, lr + 1, length = ncores + 1))
+  
+	### Boilerplate to set up parallel computing
+	library("foreach")
+	library("iterators")
+	library("parallel")
+	if (exists("cl") && is(cl, "cluster")) {
+	  stopCluster(cl)
+	}
+	cl <- makeCluster(ncores, type="SOCK", homogeneous=TRUE, useXDR=FALSE)
+	library(doParallel)
+	registerDoParallel(cl)
+  # jedem Prozessor wird sein Paket zugeteilt, welches er dann abarbeitet
+  P <- foreach(i = 1:ncores, .combine = c, .packages = c("log4r")) %dopar% {  
+  source("X:/KG/Mathe/Rfunctions/NonparaSNPs.R")
+			logger <- create.logger(logfile = "SNPs.log", level = log4r:::DEBUG)
+			#log4r::info(logger, paste(k, nx))
+			sb <- seq(batch[i], batch[i + 1] - 1, by = 1)
+			tmp <-apply(data[sb,],1,nu,y,dist=dist) 	
+		return(tmp)
+		}
+  stopCluster(cl)
+   # stoppe Cluster
+  #names(P) <- rownames(data)
+  P
+}
+
+np <- function(Y, data, dist = "asymptotic") {
+  lapply(Y, Nonpara_fast, data, dist = dist)
+}
+
+
+npMultSNPassoc <- function(y, snpdata, adjdata, method = "holm", ncores = 8){
+  # Einzel-SNP-Analyse fÃ¼r setupSNP-object mit multivariater median regression 
+  # bei BerÃ¼cksichtigung ausgewÃ¤hlter Korrekturfaktoren (additives Modell, 
+  # gleiche Korrekturfaktoren fÃ¼r alls SNPs)
+  # 
+  # Args:
+  #   y       : abhÃ¤ngige numerische Variable 
+  #   snpdata : setupSNP-object
+  #   adjdata : dataframe mit Korrekturfaktoren in Spalten
+  #   method  : Adjustierungsmethode fÃ¼r multiples Testen, siehe ?p.adjust 
+  #   ncores  : Anzahl der Kerne
+  #                                           Non
+
+	library(quantreg)
+	if (class(snpdata)[1]!="setupSNP")
+		stop("Require setupSNP object")
+	if (length(y)!=nrow(snpdata))
+		stop("length(y)!=nrow(snpdata)")
+	if (length(y)!=nrow(adjdata))
+		stop("length(y)!=nrow(adjdata)")
+
+	lr <- nd <- ncol(snpdata)
+	P <- c(NULL)
+	wy <- which(!is.na(y))
+	if (is.null(adjdata)) {
+	adj <- NULL
+	y <- y[wy]
+	} else {
+	if (is.numeric(adjdata)) {
+		wadj < -which(!is.na(adjdata))
+		wy <- intersect(wadj,wy)
+		adj <- adjdata[wy]
+		y <- y[wy]
+	} else {
+		wadj <- which(apply(!is.na(adjdata), 1, all))
+		wy <- intersect(wadj, wy)
+		adj <- adjdata[wy, ]
+		y <- y[wy]
+	}
+	} 
+	ny <- nlevels(as.factor(as.character(y)))
+	if (ny <= 1)
+		stop('Dependent variable y contains <=1 level')
+	if (length(y) == 1)
+		stop('Dependent variable y contains only 1 non-missing value (for non-missing adjustment variables)')
+
+	# erstelle fÃ¼r jeden Prozessor sein Paket. 
+	# Dadurch wird die EffektivitÃ¤t des doSNOW-Pakets 
+	# stark (bis zu 6-mal schneller) erhÃ¶ht.
+	batch <- floor(seq(1, lr + 1, length = ncores + 1))
+	
+	### Boilerplate to set up parallel computing
+	library("foreach")
+	library("iterators")
+	library("parallel")
+	if (exists("cl") && is(cl, "cluster")) {
+	  stopCluster(cl)
+	}
+	cl <- makeCluster(ncores, type="SOCK", homogeneous=TRUE, useXDR=FALSE)
+	library("doParallel")
+	registerDoParallel(cl)
+	
+	# jedem Prozessor wird sein Paket zugeteilt, welches er dann abarbeitet
+	P <- foreach(i = 1:ncores, .combine = rbind, .packages = c("quantreg", "coin", "SNPassoc", "log4r")) %dopar% {
+		#messages <- data.frame(Proc=NULL, NumSNP=NULL, Message=NULL)
+		source("X:/KG/Mathe/Rfunctions/NonparaSNPs.R")
+		logger <- create.logger(logfile = "SNPs.log", level = log4r:::DEBUG)
+		sb <- seq(batch[i], batch[i + 1] - 1, by = 1)
+		tmp <- c(NULL)
+		NX <- rep(NA, length = length(sb))
+		for (k in sb) {
+			tadj <- adj
+			x <- snpdata[wy, nd - lr + k]
+			nx <- nlevels(as.factor(as.character(x)))
+			ny <- nlevels(as.factor(as.character(y[which(!is.na(x))])))
+			if (ny <= 1) {
+				p <- rep(NA, 4)
+			}
+			if (is.numeric(tadj)) {
+				if (nlevels(tadj[which(!is.na(x))]) <= 1) {
+					p <- rep(NA, 4)
+				}
+			} else {
+				nl_adj <- nlevels.frame(tadj[which(!is.na(x)), ])
+				if (any(nl_adj) <= 1) {
+					wnl <- which(nl_adj > 1)
+					if (length(wnl) >= 1 && length(wnl) < ncol(tadj)) {
+						tadj <- tadj[, wnl]
+						#messages <- rbind(messages, data.frame(Proc=i, NumSNP=colnames(snpdata)[nd - lr + k], Message=paste("Adjusting", colnames(snpdata)[nd - lr + k], "only for:", paste(names(tadj), collapse=", "))))
+						log4r::info(logger, paste("Adjusting", colnames(snpdata)[nd - lr + k], "only for:", paste(names(tadj), collapse=", ")))
+					} else {
+						p <- rep(NA, 4)
+					}
+				}
+			}
+			nadj <- nlevels.frame(tadj[which(!is.na(x)), ])
+			id <- which(nadj == nx)
+			if (length(id) > 0) {
+				killid <- c(NULL)
+				for (l in 1:length(id)) {
+					tab <- table(tadj[which(!is.na(x)), id[l]], x[which(!is.na(x))])
+					n1 <- sum(colSums(tab) == 0)
+					n2 <- sum(colSums(tab == 0) == (nx - 1))
+					if (n2 == nx && n1 == 0) {
+						killid <- c(killid, id[l])
+						#log4r::info(logger, paste(tab[1, 1], tab[1, 2], tab[2, 1], tab[2, 2], dim(tab)[1], dim(tab)[2], nadj, nx))
+						#messages <- rbind(messages, data.frame(Proc=i, NumSNP=colnames(snpdata)[nd - lr + k], Message=paste("Adjusting", colnames(snpdata)[nd - lr + k], "not for:", paste(names(tadj)[id[l]], collapse=", "))))
+						log4r::info(logger, paste("Adjusting", colnames(snpdata)[nd - lr + k], "not for:", paste(names(tadj)[id[l]], collapse=", ")))
+					}
+				}
+				if (!is.null(killid)) {
+					tadj <- tadj[, -killid]
+				}
+			}
+			
+			id <- which(nadj + 1 == nx)
+			if (length(id) > 0) {
+				killid <- c(NULL)
+				for (l in 1:length(id)) {
+					tab <- table(tadj[which(!is.na(x)), id[l]], x[which(!is.na(x))])
+					n1 <- sum(rowSums(tab) == 0)
+					n2 <- sum(rowSums(tab == 0) == (nx - 1))
+					if (n2 > 0 && n1 == 0) {
+						killid <- c(killid, id[l])
+						#messages <- rbind(messages, data.frame(Proc=i, NumSNP=colnames(snpdata)[nd - lr + k], Message=paste("Adjusting", colnames(snpdata)[nd - lr + k], "not for:", paste(names(tadj)[id[l]], collapse=", "))))
+						log4r::info(logger, paste("Adjusting", colnames(snpdata)[nd - lr + k], "not for:", paste(names(tadj)[id[l]], collapse=", ")))
+					}
+				}
+				if (!is.null(killid)) {
+					tadj <- tadj[, -killid]
+				}
+			}
+			
+			
+			NX[k] <- nx
+			add <- as.ordered(additive(x))
+			levels(add) <- 1:nlevels(add)
+			add <- as.numeric(as.character(add))
+			if (nx == 3) {
+				rec <- recessive(x)
+				dom <- dominant(x)
+				pr <- anova_rq_fast(y, rec, tadj, 1, "recessive")
+				pd <- anova_rq_fast(y, dom, tadj, 1, "dominant")
+				pa <- anova_rq_fast(y, add, tadj, 0)
+			} else if (nx == 2) {
+				cod <- codominant(x)
+				pc <- anova_rq_fast(y, cod, tadj, 1, "codominant")
+				pr <- pd <- pc
+				pa <- anova_rq_fast(y, add, tadj, 0)
+			}
+			p <- c(pd, pr, pa)
+			tmp <- rbind(tmp, p)
+		}
+		#if(length(messages)) {
+			#write.table(messages, file=paste("logging_for_Prozessor",i, "at_EP_", names(y),".txt", sep=""), sep=";", row.names=FALSE, col.names=TRUE)
+		#}
+		return(tmp)
+	}
+	stopCluster(cl) # stoppe Cluster
+	colnames(P) <- c("dominant", "recessive", "additive")
+	rownames(P) <- colnames(snpdata)
+	return(P)
+}
+
+
+NonparaAssociation_multi_justp<-function(y,snpdata,adjdata){
+#Multivariate median regression
+library(quantreg)
+library(SNPassoc)
+if (class(snpdata)[1]!="setupSNP")
+stop("Require setupSNP object")
+if (length(y)!=nrow(snpdata))
+stop("length(y)!=nrow(snpdata)")
+lr<-nd<-ncol(snpdata)
+P<-NX<-c(NULL)
+wy<-which(!is.na(y))
+if (is.null(adjdata)){
+ adj<-NULL
+ y<-y[wy]
+ }
+else{
+ if (is.numeric(adjdata)){
+  wadj<-which(!is.na(adjdata))
+  wy<-intersect(wadj,wy)
+  adj<-adjdata[wy]
+  y<-y[wy]
+  }
+ else{
+  wadj<-which(apply(!is.na(adjdata),1,all))
+  wy<-intersect(wadj,wy)
+  adj<-adjdata[wy,]
+  y<-y[wy]
+ } 
+} 
+ny<-nlevels(as.factor(as.character(y)))
+if (ny <=1)
+stop('Dependent variable y contains <=1 level')
+if (length(y)==1)
+stop('Dependent variable y contains only 1 non-missing value (for non-missing adjustment variables)')
+#nl_adj<-nlevels.frame(adjdata)
+#if (any(nl_adj)<=1){
+#wnl<-which(nl_adj>1)
+# if (length(wnl)>1){
+#  if (is.numeric(adjdata)){
+#    adjdata<-adjdata[wnl]
+#   }
+#  else{ 
+#   adjdata<-adjdata[,wnl]
+#  }
+# }
+#}
+ for (i in 1:lr){                                                                                      
+  x<-snpdata[wy,nd+1-i]
+  nx<-nlevels(as.factor(as.character(x)))
+  ny<-nlevels(as.factor(as.character(y[which(!is.na(x))])))
+  if (ny<=1){
+  p<-rep(NA,4)
+  }
+  if (is.numeric(adj)){
+   if (nlevels(adj[which(!is.na(x))])<=1){
+   p<-rep(NA,4)
+   }
+  }
+  else{
+   nl_adj<-nlevels.frame(adj[which(!is.na(x)),])
+   if (any(nl_adj)<=1){
+    wnl<-which(nl_adj>1)
+     if (length(wnl)>=1 && length(wnl)<ncol(adj)){
+      adj<-adj[,wnl]
+      print(paste("Adjusting",colnames(snpdata)[nd+1-i],"only for:",paste(names(adj),collapse=", ")))
+     }
+     else{
+     p<-rep(NA,4)
+    }
+    }
+  }
+  NX[lr-i]<-nx
+  add<-as.ordered(additive(x))
+  levels(add)<-1:nlevels(add)
+  add<-as.numeric(as.character(add))
+  if (nx==3){
+   rec<-recessive(x)
+   dom<-dominant(x)
+   pr<-anova_rq_fast(y,rec,adj,1,"recessive")
+   pd<-anova_rq_fast(y,dom,adj,1,"dominant")
+   pa<-anova_rq_fast(y,add,adj,0)
+ }
+ if (nx==2){
+	cod <- codominant(x)
+   pc<-anova_rq_fast(y,cod,adj,1,"codominant")
+   pr<-pd<-pc
+   pa<-anova_rq_fast(y,add,adj,0)
+  }
+  p<-c(pd,pr,pa)
+  names(p)<-c("dominant","recessive","additive")
+  P<-rbind(p,P)
+ }
+rownames(P)<-colnames(snpdata)
+P
+}
+
+nlevels.frame<-function(dataframe){
+	R <- dataframe
+	n <- c(NULL)
+	for (i in 1:ncol(R)) {
+		n[i] <- nlevels(factor(R[, i]))
+	}
+	return(n)
+}
+
+anova_rq_fast<-function(y, x, data, nx, nam=NA){
+	#nx = number of reporting lines -1 for x (nx=2 for codominant model, nx=1 for dominant/recessive model, nx=0 for additive model) 
+	w0 <- which(!is.na(x))
+	y <- y[w0]
+	x <- x[w0]
+	if (is.null(data)){
+		r0 <- rq(y ~ 1)
+		r1 <- rq(y ~ x)
+		x <- x[which(!is.na(y))]
+	} 
+  else {
+		if (is.numeric(data)) {
+			data <- data[w0]
+			x <- x[intersect(which(!is.na(data)), which(!is.na(y)))]  
+			y <- y[intersect(which(!is.na(data)), which(!is.na(y)))]
+			data<-data[intersect(which(!is.na(data)), which(!is.na(y)))]
+      r0 <- rq(y ~ data)
+			r1 <- rq(y ~ x + data)
+		} 
+    else {
+			data <- data[w0, ]
+			x <- x[intersect(which(apply(!is.na(data),1,all)),which(!is.na(y)))] 
+		  y <- y[intersect(which(!is.na(data)), which(!is.na(y))) ]
+			data<-data[intersect(which(!is.na(data)), which(!is.na(y))),]
+			r0 <- rq(y ~ ., data=data)
+			r1 <- rq(y ~ x + ., data=data)
+		}
+	}
+	#if(any(table(x)==1)){ 
+	#p<-NA
+	#drop1(r1,test="Chisq")[2,4]
+	#}
+	#else{
+	p <- anova(r0, 
+             r1, 
+             test  = "rank", 
+             score = "wilcoxon")$table[, 4]
+	# }
+	p
+}
+
+
+npSNPassoc <- function(y, snpData, adjData = NULL, ncores = 8, method = "holm", dist = "asymptotic", split = 24000) {
+	
+	nSNPs <- ncol(snpData)
+	if (nSNPs > 1.2 * split) {
+		parts <- floor(nSNPs / split)
+		batch <- floor(seq(1, nSNPs + 1, length = parts + 1))
+		P <- c(NULL)
+		for (i in 1:parts) {
+			print(paste(i, parts))
+			s <- proc.time()
+			sb <- seq(batch[i], batch[i + 1] - 1, by = 1)
+			tmp <- c(NULL)
+			if (is.null(adjData)) {
+				tmp <- npUnivSNPassoc(y, snpData[, sb], dist, ncores)
+			} else {
+				tmp <- npMultSNPassoc(y, snpData[, sb], adjData, method, ncores)
+			}
+			print(proc.time() - s)
+			P <- rbind(P, tmp)
+		}
+	} else {
+		if (is.null(adjData)) {
+			P <- npUnivSNPassoc(y, snpData, dist, ncores)
+		} else {
+			P <- npMultSNPassoc(y, snpData, adjData, method, ncores)
+		}
+	}
+	return(P)
+}
