@@ -1,0 +1,551 @@
+rm(list=ls())
+
+library(lattice)
+library(ggplot2)
+library(ggthemes)
+theme_set(theme_stata())
+library(Cairo)
+library(mosaic)
+trellis.par.set(theme = col.mosaic())
+
+library(XLConnect)
+
+library(SNPassoc)
+source("X:/KG/Mathe/Rfunctions&Skripte/Rfunctions/RSnpFunctions.R")
+
+file <- "Genetic Analysis.xlsx"
+
+
+# Variablen
+ep <-  c("SLC22A9_mRNA_all_isos", "SLC22A9_mRNA_exon9", "OAT7_protein_top_band", "OAT7_protein_total_bands")
+var <- c("Sex", "Age", "Smoker", "Alcohol", "Diag", "Drugs", "BiliC12", "GGT", "CrP", "Chol")
+
+load("oat7.RData")
+# oat7 <- subset(oat7, Chol == 0)
+
+
+snps <- oat7[, 9:30]
+ss <- apply(snps, 2, table, useNA="ifany")
+
+count <- 1
+for (i in 1:length(ss)) {
+  n <- length(ss[[i]])
+  writeWorksheetToFile(file, sheet="Freq", data=ss[[i]], startRow=count, startCol=2)
+  writeWorksheetToFile(file, sheet="Freq", data=names(ss)[i], startRow=count)
+  count <- count + n + 1
+}
+
+bsnps <- c("rs72542467", "rs72542468", "rs72542471", "rs72542472", "IKP_NEW1", "rs199952281", "IKP_NEW2", "rs17654567")
+id <- which(colnames(snps) %in% bsnps)
+snps <- snps[, -id]
+
+
+
+for (i in 1:ncol(snps)) {
+  snps[, i] <- factor(snps[, i])
+}
+
+# Weniger als 3 het oder hom: Diese zusammenfassen
+table(snps$rs12287151)
+levels(snps$rs12287151)[2] <- "AA"
+levels(snps$rs78795943)[1:2] <- c("AA", "AT")
+snps <- setupSNP(snps, sep="", colSNPs=1:14)
+
+# HWE ----
+hwe <- tableHWE(snps)
+hwe <- data.frame(hwe)
+writeWorksheetToFile(file, sheet="HWE", data=hwe, rownames=rownames(hwe))
+
+
+# Graphics ----
+library(reshape2)
+SNPdata <- cbind(oat7[, 3:8], snps)
+mSNPdata <- melt(SNPdata[, c(1, 7:20)], measure.vars=names(SNPdata)[c(7:20)])
+mSNPdata$value <- factor(mSNPdata$value)
+# mSNPdata$value <- ordered(mSNPdata$value, levels=levels(mSNPdata$value)[c(1, 2, 3, 5, 6, 4, 9, 8, 7)])
+# bwplot(SLC22A9_mRNA_all_isos ~  value | variable, data=mSNPdata, scale="free", relation="free", drop.unused.levels=T)
+g <- ggplot(na.omit(mSNPdata)) + 
+  geom_dotplot(aes(x=value, y=SLC22A9_mRNA_all_isos, fill="w"), binaxis = "y", stackdir = "center", binpositions="all", alpha=0.9) +
+  geom_boxplot(aes(x=value, y=SLC22A9_mRNA_all_isos), alpha=.75) + 
+  xlab("") + ylab("") + ggtitle("SLC22A9 mRNA all isos") + 
+  facet_wrap(~ variable, scales="free") + scale_fill_stata() + theme(legend.position="none")
+CairoPDF("Boxplots_SLC22A9_mRNA_all_isos.pdf", width=15, height=10)
+print(g)
+dev.off()
+
+mSNPdata <- melt(SNPdata[, c(2, 7:20)], measure.vars=names(SNPdata)[c(7:20)])
+# mSNPdata$value <- ordered(mSNPdata$value, levels=levels(mSNPdata$value)[c(1, 2, 3, 5, 6, 4, 9, 8, 7)])
+g <- ggplot(na.omit(mSNPdata)) + 
+  geom_dotplot(aes(x=value, y=SLC22A9_mRNA_exon9, fill="w"), binaxis = "y", stackdir = "center", binpositions="all") +
+  geom_boxplot(aes(x=value, y=SLC22A9_mRNA_exon9), alpha=.75) + 
+  xlab("") + ylab("") + ggtitle("SLC22A9 mRNA exon9") + 
+  facet_wrap(~ variable, scales="free") + scale_fill_stata() + theme(legend.position="none")
+CairoPDF("Boxplots_SLC22A9_mRNA_exon9.pdf", width=15, height=10)
+print(g)
+dev.off()
+
+mSNPdata <- melt(SNPdata[, c(3, 7:20)], measure.vars=names(SNPdata)[c(7:20)])
+# mSNPdata$value <- ordered(mSNPdata$value, levels=levels(mSNPdata$value)[c(1, 2, 3, 5, 6, 4, 9, 8, 7)])
+g <- ggplot(na.omit(mSNPdata)) + 
+  geom_dotplot(aes(x=value, y=OAT7_protein_top_band, fill="w"), binaxis = "y", stackdir = "center", binpositions="all") +
+  geom_boxplot(aes(x=value, y=OAT7_protein_top_band), alpha=.75) + 
+  xlab("") + ylab("") + ggtitle("OAT7 protein top band") + 
+  facet_wrap(~ variable, scales="free") + scale_fill_stata() + theme(legend.position="none")
+CairoPDF("Boxplots_OAT7_protein_top_band.pdf", width=15, height=10)
+print(g)
+dev.off()
+
+mSNPdata <- melt(SNPdata[, c(4, 7:20)], measure.vars=names(SNPdata)[c(7:20)])
+# mSNPdata$value <- ordered(mSNPdata$value, levels=levels(mSNPdata$value)[c(1, 2, 3, 5, 6, 4, 9, 8, 7)])
+g <- ggplot(na.omit(mSNPdata)) + 
+  geom_dotplot(aes(x=value, y=OAT7_protein_total_bands, fill="w"), binaxis = "y", stackdir = "center", binpositions="all") +
+  geom_boxplot(aes(x=value, y=OAT7_protein_total_bands), alpha=.75) + 
+  xlab("") + ylab("") + ggtitle("OAT7 protein total bands") + 
+  facet_wrap(~ variable, scales="free") + scale_fill_stata() + theme(legend.position="none")
+CairoPDF("Boxplots_OAT7_protein_total_bands.pdf", width=15, height=10)
+print(g)
+dev.off()
+
+
+# SNP Analyse ----
+var <- c("Sex", "Age", "Smoker", "Alcohol", "Diag", "Drugs", "BiliC12", "GGT", "CrP", "Chol", "HNF1_mRNA", "HNF4_mRNA")
+ep <-  c("SLC22A9_mRNA_all_isos", "SLC22A9_mRNA_exon9", "OAT7_protein_top_band", "OAT7_protein_total_bands")
+SNPdata <- cbind(oat7[, 3:8], snps)
+summary(SNPdata)
+SNPdata <- cbind(SNPdata, oat7[, c("Sex", "Age", "Smoker", "Alcohol", "Diag", "Drugs", "BiliC12", "GGT", "CrP", "Chol", "HNF1_mRNA", "HNF4_mRNA")])
+SNPdata <- setupSNP(SNPdata, colSNPs=7:20, sep="")
+snpnam <- colnames(SNPdata)[19:32]
+
+# SLC22A9_mRNA_all_isos
+res <- list()
+l <- 0
+ll <- 1
+for (i in 1:length(snpnam)) {
+  formel <- as.formula(paste("log(", ep[1], ")", "~", paste(var, collapse="+"), " + ", snpnam[i]))
+  res[[i]] <- association(formel, data=SNPdata)
+  x <- matrix(res[[i]], ncol=8)
+  colnames(x) <- colnames(res[[i]])
+  x <- cbind(rownames(res[[i]]), x)
+  x <- cbind(rep(NA, nrow(x)), x)
+  x[1, 1] <- snpnam[i]
+  writeWorksheetToFile(file, sheet="SNP Analyse non Chol", data=x, startRow=ll)
+  l <- nrow(x)
+  ll <- l + ll + 2
+}
+
+# SLC22A9_mRNA_exon9
+res <- list()
+l <- 0
+ll <- 1
+for (i in 1:length(snpnam)) {
+  formel <- as.formula(paste("log(", ep[2], ")", "~", paste(var, collapse="+"), " + ", snpnam[i]))
+  res[[i]] <- association(formel, data=SNPdata)
+  x <- matrix(res[[i]], ncol=8)
+  colnames(x) <- colnames(res[[i]])
+  x <- cbind(rownames(res[[i]]), x)
+  x <- cbind(rep(NA, nrow(x)), x)
+  x[1, 1] <- snpnam[i]
+  writeWorksheetToFile(file, sheet="SNP Analyse non Chol", data=x, startRow=ll, startCol=12)
+  l <- nrow(x)
+  ll <- l + ll + 2
+}
+
+# OAT7_protein_top_band
+res <- list()
+l <- 0
+ll <- 1
+for (i in 1:length(snpnam)) {
+  formel <- as.formula(paste("log(", ep[3], ")", "~", paste(var, collapse="+"), " + ", snpnam[i]))
+  res[[i]] <- association(formel, data=SNPdata)
+  x <- matrix(res[[i]], ncol=8)
+  colnames(x) <- colnames(res[[i]])
+  x <- cbind(rownames(res[[i]]), x)
+  x <- cbind(rep(NA, nrow(x)), x)
+  x[1, 1] <- snpnam[i]
+  writeWorksheetToFile(file, sheet="SNP Analyse non Chol", data=x, startRow=ll, startCol=24)
+  l <- nrow(x)
+  ll <- l + ll + 2
+}
+
+# OAT7_protein_total_bands
+res <- list()
+l <- 0
+ll <- 1
+for (i in 1:length(snpnam)) {
+  formel <- as.formula(paste("log(", ep[4], ")", "~", paste(var, collapse="+"), " + ", snpnam[i]))
+  res[[i]] <- association(formel, data=SNPdata)
+  x <- matrix(res[[i]], ncol=8)
+  colnames(x) <- colnames(res[[i]])
+  x <- cbind(rownames(res[[i]]), x)
+  x <- cbind(rep(NA, nrow(x)), x)
+  x[1, 1] <- snpnam[i]
+  writeWorksheetToFile(file, sheet="SNP Analyse non Chol", data=x, startRow=ll, startCol=36)
+  l <- nrow(x)
+  ll <- l + ll + 2
+}
+
+
+
+# Variability SNPs ----
+library(MASS)
+nsnps <- names(snps)
+SNPdata[, nsnps] <- apply(SNPdata[, nsnps], 2, additive)
+SNPdata <- na.omit(SNPdata)
+formel <- as.formula(paste("log(", ep[1], ")", "~", paste(nsnps, collapse="+")))
+fit1 <- aov(formel, data=SNPdata, na.action=na.omit)
+fit11 <- lm(formel, data=SNPdata, na.action=na.omit)
+sl <- stepAIC(fit11)
+r <- summary(sl)$adj.r.squared
+formel <- as.formula(paste("log(", ep[2], ")", "~", paste(nsnps, collapse="+")))
+fit2 <- aov(formel, data=SNPdata, na.action=na.omit)
+fit21 <- lm(formel, data=SNPdata, na.action=na.omit)
+sl <- stepAIC(fit21)
+r <- c(r, summary(sl)$adj.r.squared)
+formel <- as.formula(paste("log(", ep[3], ")", "~", paste(nsnps, collapse="+")))
+fit3 <- aov(formel, data=SNPdata, na.action=na.omit)
+fit31 <- lm(formel, data=SNPdata, na.action=na.omit)
+sl <- stepAIC(fit31)
+r <- c(r, summary(sl)$adj.r.squared)
+formel <- as.formula(paste("log(", ep[4], ")", "~", paste(nsnps, collapse="+")))
+fit4 <- aov(formel, data=SNPdata, na.action=na.omit)
+fit41 <- lm(formel, data=SNPdata, na.action=na.omit)
+sl <- stepAIC(fit41)
+r <- c(r, summary(sl)$adj.r.squared)
+r
+
+summary(sl)
+        
+
+# Variability ALL ----
+library(MASS)
+
+SNPdata <- cbind(oat7[, 3:8], snps)
+SNPdata <- cbind(SNPdata, oat7[, c("Sex", "Age", "Smoker", "Alcohol", "Diag", "Drugs", "BiliC12", "GGT", "CrP", "Chol", "HNF1_mRNA", "HNF4_mRNA")])
+SNPdata <- setupSNP(SNPdata, colSNPs=7:20, sep="")
+snpnam <- colnames(SNPdata)[19:32]
+
+
+nsnps <- names(snps)
+SNPdata[, nsnps] <- apply(SNPdata[, nsnps], 2, additive)
+load("oat7.RData")
+nf <- c("HNF4_mRNA", "HNF1_mRNA")
+nf <- nf[2]
+SNPdata <- cbind(SNPdata, oat7[, var[-c(11, 12)]])
+SNPdata <- na.omit(SNPdata[, c(ep, nf, var[-c(11, 12)], nsnps)])
+nsnps <- c(nsnps, nf, var[-c(11, 12)])
+
+
+SNPdata <- na.omit(SNPdata)
+formel <- as.formula(paste("log(", ep[1], ")", "~", paste(nsnps, collapse="+")))
+fit11 <- lm(formel, data=SNPdata, na.action=na.omit)
+sl <- stepAIC(fit11)
+summary(sl)
+r <- summary(sl)$adj.r.squared
+formel <- as.formula(paste("log(", ep[2], ")", "~", paste(nsnps, collapse="+")))
+fit21 <- lm(formel, data=SNPdata, na.action=na.omit)
+sl <- stepAIC(fit21)
+summary(sl)
+r <- c(r, summary(sl)$adj.r.squared)
+formel <- as.formula(paste("log(", ep[3], ")", "~", paste(nsnps, collapse="+")))
+fit31 <- lm(formel, data=SNPdata, na.action=na.omit)
+sl <- stepAIC(fit31)
+summary(sl)
+r <- c(r, summary(sl)$adj.r.squared)
+formel <- as.formula(paste("log(", ep[4], ")", "~", paste(nsnps, collapse="+")))
+fit41 <- lm(formel, data=SNPdata, na.action=na.omit)
+sl <- stepAIC(fit41)
+r <- c(r, summary(sl)$adj.r.squared)
+r
+
+
+
+# Haplotyp Analyse ----
+hc <- function(ha, ws=11:14) {
+  coef1 <- summary(ha)$coef[, c(1, 4)]
+  pa <- rep(NA, nrow(coef1))
+  wg <- grep("geno", rownames(coef1))
+  pa[wg] <- p.adjust(coef1[wg, 2])
+  coef1 <- cbind(coef1, pa)
+  coef1 <- as.data.frame(cbind(rownames(coef1), coef1))
+  colnames(coef1) <- c(" ", "Coefficient", "p-value", "Holm-adj. p-value")
+  pinfo <- as.data.frame(ha$haplo.post.info[, 1:3])
+  hu <- as.data.frame(cbind(paste("geno.", rownames(ha$haplo.unique, ), sep=""), ha$haplo.unique, ha$haplo.freq))
+  s <- summary(ha)
+  colnames(hu) <- c("", colnames(s[[15]]))
+  list(coef1=coef1, hu=hu, pinfo=pinfo)
+}
+
+SNPdata <- cbind(oat7[, 3:8], snps)
+SNPdata <- cbind(SNPdata, oat7[, c("Sex", "Age", "Smoker", "Alcohol", "Diag", "Drugs", "BiliC12", "GGT", "CrP", "Chol", "HNF1_mRNA", "HNF4_mRNA")])
+SNPdata <- setupSNP(SNPdata, colSNPs=7:20, sep="")
+snpnam <- colnames(SNPdata)[19:32]
+
+tag.SNPs <- names(SNPdata)[19:32]
+geno <- make.geno(SNPdata, tag.SNPs)
+
+# SLC22A9_mRNA_all_isos
+formel <- as.formula(paste("log(", ep[1], ")", "~ geno + ", paste(var, collapse="+")))
+mod <- haplo.glm(formel, 
+               data=SNPdata, 
+               family=gaussian, 
+               locus.label=tag.SNPs,
+               allele.lev=attributes(geno)$unique.alleles,
+               control = haplo.glm.control(haplo.freq.min=0.02))
+summary(mod)
+writeWorksheetToFile(file="Haplotype Analyse_SLC22A9_mRNA_all_isos.xlsx", sheet=c("Effects", "Haplotypes", "Haplotypes_for_samples"), data=hc(mod))
+pat <- hc(mod)$pinfo
+freq <- as.numeric(as.character(hc(mod)$hu$hap.freq))
+id <- which(freq < 0.01)
+id1 <- which(is.element(pat$hap1, id))
+id2 <- which(is.element(pat$hap2, id))
+id <- c(id1, id2)
+pat <- pat[-id, ]
+for (i in 1:nrow(pat)) {
+  if (pat$hap1[i] > pat$hap2[i]) {
+    tmp <- pat$hap1[i]
+    pat$hap1[i] <- pat$hap2[i]
+    pat$hap2[i] <- tmp 
+  }
+}
+table(pat$hap1, pat$hap2)
+pat$geno <- paste0(pat$hap1, "/", pat$hap2)
+pat$geno <- factor(pat$geno)
+levels(pat$geno) <- paste0(levels(pat$geno), " (", round(prop.table(table(pat$geno)) * 100, 1), ")")
+oat7$id <- 1:nrow(oat7)
+library(data.table)
+pat$value <- 0
+for (i in 1:nrow(pat)) {
+  id <- which(is.element(oat7$id, pat$indx[i]))
+  pat$value[i] <- oat7$SLC22A9_mRNA_all_isos[i]
+}
+pat <- data.table(pat)
+pp <- pat[, median(value), by=geno]
+theme_set(theme_stata(base_size=15))
+h <- diff(range(pat$value)) / 60
+g <- ggplot(pat, aes(x=reorder(geno, value, FUN=median), y=value)) + 
+  geom_dotplot(mapping=aes(fill="d"), stackdir="center", binaxis="y", binwidth=h, position = "dodge") +
+  geom_boxplot(alpha=.7) + scale_fill_stata() + theme(legend.position="none", axis.text.x=element_text(angle=45, hjust=1, vjust=1)) +
+  xlab("genotype") + ylab("SLC22A9 mRNA all isos") + ggtitle("Haplotype frequency > 1%")
+CairoPDF("Genotype_Boxplots_SLC22A9_mRNA_all_isos_01%.pdf", width=15, height=10)
+print(g)
+dev.off()
+
+
+
+
+# SLC22A9_mRNA_exon9
+formel <- as.formula(paste("log(", ep[2], ")", "~ geno + ", paste(var, collapse="+")))
+mod <- haplo.glm(formel, 
+                 data=SNPdata, 
+                 family=gaussian, 
+                 locus.label=tag.SNPs,
+                 allele.lev=attributes(geno)$unique.alleles,
+                 control = haplo.glm.control(haplo.freq.min=0.01))
+summary(mod)
+writeWorksheetToFile(file="Haplotype Analyse_SLC22A9_mRNA_exon9.xlsx", sheet=c("Effects", "Haplotypes", "Haplotypes_for_samples"), data=hc(mod))
+pat <- hc(mod)$pinfo
+freq <- as.numeric(as.character(hc(mod)$hu$hap.freq))
+id <- which(freq < 0.01)
+id1 <- which(is.element(pat$hap1, id))
+id2 <- which(is.element(pat$hap2, id))
+id <- c(id1, id2)
+pat <- pat[-id, ]
+for (i in 1:nrow(pat)) {
+  if (pat$hap1[i] > pat$hap2[i]) {
+    tmp <- pat$hap1[i]
+    pat$hap1[i] <- pat$hap2[i]
+    pat$hap2[i] <- tmp 
+  }
+}
+table(pat$hap1, pat$hap2)
+pat$geno <- paste0(pat$hap1, "/", pat$hap2)
+pat$geno <- factor(pat$geno)
+levels(pat$geno) <- paste0(levels(pat$geno), " (", round(prop.table(table(pat$geno)) * 100, 1), ")")
+oat7$id <- 1:nrow(oat7)
+library(data.table)
+pat$value <- 0
+for (i in 1:nrow(pat)) {
+  id <- which(is.element(oat7$id, pat$indx[i]))
+  pat$value[i] <- oat7$SLC22A9_mRNA_exon9[i]
+}
+pat <- data.table(pat)
+pp <- pat[, median(value), by=geno]
+theme_set(theme_stata(base_size=15))
+h <- diff(range(pat$value)) / 60
+g <- ggplot(pat, aes(x=reorder(geno, value, FUN=median), y=value)) + 
+  geom_dotplot(mapping=aes(fill="d"), stackdir="center", binaxis="y", binwidth=h, position = "dodge") +
+  geom_boxplot(alpha=.7) + scale_fill_stata() + theme(legend.position="none", axis.text.x=element_text(angle=45, hjust=1, vjust=1)) +
+  xlab("genotype") + ylab("SLC22A9 mRNA exon9") + ggtitle("Haplotype frequency > 1%")
+CairoPDF("Genotype_Boxplots_SLC22A9_mRNA_exon9_01%.pdf", width=15, height=10)
+print(g)
+dev.off()
+
+
+# OAT7_protein_top_band
+formel <- as.formula(paste("log(", ep[3], ")", "~ geno + ", paste(var, collapse="+")))
+mod <- haplo.glm(formel, 
+                 data=SNPdata, 
+                 family=gaussian, 
+                 locus.label=tag.SNPs,
+                 allele.lev=attributes(geno)$unique.alleles,
+                 control = haplo.glm.control(haplo.freq.min=0.01))
+summary(mod)
+writeWorksheetToFile(file="Haplotype Analyse_OAT7_protein_top_band.xlsx", sheet=c("Effects", "Haplotypes", "Haplotypes_for_samples"), data=hc(mod))
+pat <- hc(mod)$pinfo
+freq <- as.numeric(as.character(hc(mod)$hu$hap.freq))
+id <- which(freq < 0.01)
+id1 <- which(is.element(pat$hap1, id))
+id2 <- which(is.element(pat$hap2, id))
+id <- c(id1, id2)
+pat <- pat[-id, ]
+for (i in 1:nrow(pat)) {
+  if (pat$hap1[i] > pat$hap2[i]) {
+    tmp <- pat$hap1[i]
+    pat$hap1[i] <- pat$hap2[i]
+    pat$hap2[i] <- tmp 
+  }
+}
+table(pat$hap1, pat$hap2)
+pat$geno <- paste0(pat$hap1, "/", pat$hap2)
+pat$geno <- factor(pat$geno)
+levels(pat$geno) <- paste0(levels(pat$geno), " (", round(prop.table(table(pat$geno)) * 100, 1), ")")
+oat7$id <- 1:nrow(oat7)
+library(data.table)
+pat$value <- 0
+for (i in 1:nrow(pat)) {
+  id <- which(is.element(oat7$id, pat$indx[i]))
+  pat$value[i] <- oat7$OAT7_protein_top_band[i]
+}
+pat <- data.table(pat)
+pp <- pat[, median(value), by=geno]
+theme_set(theme_stata(base_size=15))
+h <- diff(range(pat$value)) / 60
+g <- ggplot(pat, aes(x=reorder(geno, value, FUN=median), y=value)) + 
+  geom_dotplot(mapping=aes(fill="d"), stackdir="center", binaxis="y", binwidth=h, position = "dodge") +
+  geom_boxplot(alpha=.7) + scale_fill_stata() + theme(legend.position="none", axis.text.x=element_text(angle=45, hjust=1, vjust=1)) +
+  xlab("genotype") + ylab("OAT7 protein top band") + ggtitle("Haplotype frequency > 1%")
+CairoPDF("Genotype_Boxplots_OAT7_protein_top_band_01%.pdf", width=15, height=10)
+print(g)
+dev.off()
+
+# OAT7_protein_total_bands
+formel <- as.formula(paste("log(", ep[4], ")", "~ geno + ", paste(var, collapse="+")))
+mod <- haplo.glm(formel, 
+                 data=SNPdata, 
+                 family=gaussian, 
+                 locus.label=tag.SNPs,
+                 allele.lev=attributes(geno)$unique.alleles,
+                 control = haplo.glm.control(haplo.freq.min=0.01))
+summary(mod)
+writeWorksheetToFile(file="Haplotype Analyse_SLC22A9_OAT7_protein_total_bands.xlsx", sheet=c("Effects", "Haplotypes", "Haplotypes_for_samples"), data=hc(mod))
+pat <- hc(mod)$pinfo
+freq <- as.numeric(as.character(hc(mod)$hu$hap.freq))
+id <- which(freq < 0.01)
+id1 <- which(is.element(pat$hap1, id))
+id2 <- which(is.element(pat$hap2, id))
+id <- c(id1, id2)
+pat <- pat[-id, ]
+for (i in 1:nrow(pat)) {
+  if (pat$hap1[i] > pat$hap2[i]) {
+    tmp <- pat$hap1[i]
+    pat$hap1[i] <- pat$hap2[i]
+    pat$hap2[i] <- tmp 
+  }
+}
+table(pat$hap1, pat$hap2)
+pat$geno <- paste0(pat$hap1, "/", pat$hap2)
+pat$geno <- factor(pat$geno)
+levels(pat$geno) <- paste0(levels(pat$geno), " (", round(prop.table(table(pat$geno)) * 100, 1), ")")
+oat7$id <- 1:nrow(oat7)
+library(data.table)
+pat$value <- 0
+for (i in 1:nrow(pat)) {
+  id <- which(is.element(oat7$id, pat$indx[i]))
+  pat$value[i] <- oat7$OAT7_protein_total_bands[i]
+}
+pat <- data.table(pat)
+pp <- pat[, median(value), by=geno]
+theme_set(theme_stata(base_size=15))
+h <- diff(range(pat$value)) / 60
+g <- ggplot(pat, aes(x=reorder(geno, value, FUN=median), y=value)) + 
+  geom_dotplot(mapping=aes(fill="d"), stackdir="center", binaxis="y", binwidth=h, position = "dodge") +
+  geom_boxplot(alpha=.7) + scale_fill_stata() + theme(legend.position="none", axis.text.x=element_text(angle=45, hjust=1, vjust=1)) +
+  xlab("genotype") + ylab("OAT7 protein total bands") + ggtitle("Haplotype frequency > 1%")
+CairoPDF("Genotype_Boxplots_OAT7_protein_total_bands_01%.pdf", width=15, height=10)
+print(g)
+dev.off()
+
+# Correlation Analyse ----
+library(stringr)
+y <- SNPdata[, 1:4]
+cc <- combn(4, 2)
+res <- data.frame(nam1=rep(NA, ncol(cc)), nam2=rep(NA, ncol(cc)), rs=rep(0, ncol(cc)), pval=rep(0, ncol(cc)))
+nam <- names(y)
+pl <- list()
+pdf("OAT7_correlations.pdf")
+for (i in 1:ncol(cc)) {
+  c <- cor.test(y[, cc[1, i]], y[, cc[2, i]], method="s")
+  res$nam1[i] <- nam[cc[1, i]]
+  res$nam2[i] <- nam[cc[2, i]]
+  res$nam1[i] <- str_replace_all(res$nam1[i], "[_]", " ")
+  res$nam2[i] <- str_replace_all(res$nam2[i], "[_]", " ")
+  res$rs[i] <- c$estimate
+  res$pval[i] <- c$p.value
+  theme_set(theme_classic())
+  if (round(res$pval[i], 2) == 0) {
+    lab <- paste0("r = ", round(res$rs[i], 2), "\n", "p < 0.001")
+  } else {
+    lab <- paste0("r = ", round(res$rs[i], 2), "\n", "p = ", round(res$pval[i], 2))
+  }
+  
+  g <- ggplot(y) + 
+    geom_point(aes_string(x=nam[cc[1, i]], y=nam[cc[2, i]])) +
+    xlab(res$nam1[i]) +
+    ylab(res$nam2[i]) +
+    annotate("text", x= 1.15 * max(y[, cc[1, i]], na.rm=T), y=1.15 * max(y[, cc[2, i]], na.rm=T), label=lab, size=8) +
+    xlim(c(0, 1.3 * max(y[, cc[1, i]], na.rm=T))) +
+    ylim(c(0, 1.3 * max(y[, cc[2, i]], na.rm=T)))
+#    CairoPNG(file=paste0("OAT7_correlations_", res$nam1[i], "_", res$nam2[i], ".png"), width=1500, height=1500)
+  print(g)
+#    dev.off()
+}
+dev.off()
+
+
+# Correlation Analyse ----
+library(stringr)
+y <- SNPdata[, 1:6]
+cc <- combn(6, 2)
+res <- data.frame(nam1=rep(NA, ncol(cc)), nam2=rep(NA, ncol(cc)), rs=rep(0, ncol(cc)), pval=rep(0, ncol(cc)))
+nam <- names(y)
+pl <- list()
+pdf("OAT7_correlations_All_Data.pdf")
+for (i in 1:ncol(cc)) {
+  c <- cor.test(y[, cc[1, i]], y[, cc[2, i]], method="s")
+  res$nam1[i] <- nam[cc[1, i]]
+  res$nam2[i] <- nam[cc[2, i]]
+  res$nam1[i] <- str_replace_all(res$nam1[i], "[_]", " ")
+  res$nam2[i] <- str_replace_all(res$nam2[i], "[_]", " ")
+  res$rs[i] <- c$estimate
+  res$pval[i] <- c$p.value
+  theme_set(theme_stata())
+  if (round(res$pval[i], 2) == 0) {
+    lab <- paste0("r = ", round(res$rs[i], 2), "\n", "p < 0.001")
+  } else {
+    lab <- paste0("r = ", round(res$rs[i], 2), "\n", "p = ", round(res$pval[i], 2))
+  }
+  
+  g <- ggplot(y) + 
+    geom_point(aes_string(x=nam[cc[1, i]], y=nam[cc[2, i]])) + aes(col="w") +
+    xlab(res$nam1[i]) +
+    ylab(res$nam2[i]) +
+    annotate("text", x= 1.15 * max(y[, cc[1, i]], na.rm=T), y=1.15 * max(y[, cc[2, i]], na.rm=T), label=lab, size=8) +
+    xlim(c(0, 1.3 * max(y[, cc[1, i]], na.rm=T))) +
+    ylim(c(0, 1.3 * max(y[, cc[2, i]], na.rm=T))) + scale_colour_stata() + theme(legend.position="none")
+  #    CairoPNG(file=paste0("OAT7_correlations_", res$nam1[i], "_", res$nam2[i], ".png"), width=1500, height=1500)
+  print(g)
+  #    dev.off()
+}
+dev.off()
+
+writeWorksheetToFile(file="Correlation Analysis.xlsx", sheet="Correlation", data=res)
